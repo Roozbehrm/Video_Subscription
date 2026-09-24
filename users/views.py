@@ -1,22 +1,15 @@
-from rest_framework import generics
+from rest_framework import generics, permissions
 
-from subscriptions.models import Payment
-from subscriptions.serializers import PaymentSerializer
-
-from .models import WatchHistory
-from .serializers import WatchHistorySerializer
+from .serializers import RegisterSerializer, UserSerializer
 
 
-class WatchHistoryListView(generics.ListAPIView):
-    serializer_class = WatchHistorySerializer
-
-    def get_queryset(self):
-        return WatchHistory.objects.filter(user=self.request.user).select_related("video")
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [permissions.AllowAny]
 
 
-class PaymentHistoryListView(generics.ListAPIView):
-    serializer_class = PaymentSerializer
-    filterset_fields = ["status", "kind"]
+class MeView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserSerializer
 
-    def get_queryset(self):
-        return Payment.objects.filter(user=self.request.user).select_related("plan")
+    def get_object(self):
+        return self.request.user
