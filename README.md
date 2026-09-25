@@ -1,0 +1,74 @@
+# Video Subscription API
+
+A simple Django REST API for a paid video streaming platform. Users can sign up, browse videos, subscribe to a plan, and watch videos based on their subscription tier. Comments, ratings, and view counts update live over WebSockets.
+
+## What it does
+
+- User registration & login (JWT auth)
+- Browse videos and categories
+- Subscription plans (free / paid tiers) with Zarinpal payment support
+- Watch videos (only if your subscription tier allows it)
+- Comment on and rate videos
+- Live updates (views, comments, ratings) via WebSockets
+- Background jobs for renewing/expiring subscriptions (Celery)
+
+## Tech stack
+
+- Django + Django REST Framework
+- Django Channels + Daphne (for WebSockets)
+- SQLite (local dev) / PostgreSQL (production)
+- Redis + Celery (background tasks, optional locally)
+- JWT auth (`djangorestframework-simplejwt`)
+- `python-decouple` for environment variables
+
+## Setup (local, no Docker)
+
+1. Create a virtual environment and activate it:
+```bash
+python -m venv venv
+venv\Scripts\activate   # Windows
+source venv/bin/activate  # Mac/Linux
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Copy the example env file and fill in your own values:
+```bash
+copy .env.example .env   # Windows
+cp .env.example .env     # Mac/Linux
+```
+At minimum, set a real `DJANGO_SECRET_KEY`. You can leave `REDIS_URL`, `CELERY_BROKER_URL`, and `CELERY_RESULT_BACKEND` empty for local dev — the app will fall back to in-memory/no Redis needed.
+
+4. Run migrations:
+```bash
+python manage.py migrate
+```
+
+5. Start the dev server:
+```bash
+python manage.py runserver
+```
+
+API docs (Swagger UI) will be available at `/api/schema/swagger-ui/`.
+
+## Running tests
+
+```bash
+pytest
+```
+
+## Running with Docker
+
+```bash
+docker-compose up --build
+```
+
+This spins up the app, database, Redis, Celery worker, and Celery beat all together.
+
+## Notes
+
+- Videos aren't served through a public media URL — they're only accessible through the `/api/videos/{id}/stream/` endpoint, which checks your subscription before letting you download/stream anything.
+- `min_tier` on a video controls which subscription plan is required to watch it (`0` = free for any logged-in user).
