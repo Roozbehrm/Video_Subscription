@@ -47,7 +47,12 @@ At minimum, set a real `DJANGO_SECRET_KEY`. You can leave `REDIS_URL`, `CELERY_B
 python manage.py migrate
 ```
 
-5. Start the dev server:
+5. Seed some demo subscription plans (optional, but handy for testing):
+```bash
+python manage.py seed_plans
+```
+
+6. Start the dev server:
 ```bash
 python manage.py runserver
 ```
@@ -72,3 +77,46 @@ This spins up the app, database, Redis, Celery worker, and Celery beat all toget
 
 - Videos aren't served through a public media URL — they're only accessible through the `/api/videos/{id}/stream/` endpoint, which checks your subscription before letting you download/stream anything.
 - `min_tier` on a video controls which subscription plan is required to watch it (`0` = free for any logged-in user).
+
+## WebSockets (live updates)
+
+Each video has a live channel for views/ratings/comments. Connect to:
+
+```
+ws://127.0.0.1:8000/ws/videos/{video_id}/
+```
+
+For example, using `wscat` (`npm install -g wscat`):
+```bash
+wscat -c ws://127.0.0.1:8000/ws/videos/1/
+```
+
+Or in the browser console:
+```js
+const ws = new WebSocket("ws://127.0.0.1:8000/ws/videos/1/");
+ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
+```
+
+**What happens when you connect:**
+- If the video doesn't exist or isn't published, the connection closes right away (code `4404`).
+- Otherwise, you immediately get a snapshot of the current stats:
+```json
+{
+  "event": "snapshot",
+  "data": {
+    "views_count": 12,
+    "avg_rating": 4.5,
+    "ratings_count": 8,
+    "comments_count": 3
+  }
+}
+```
+
+**After that, you'll get pushed events whenever something happens to that video** (someone watches it, rates it, or comments), for example:
+```json
+{ "event": "view", "data": { "views_count": 13 } }
+{ "event": "rating", "data": { "avg_rating": 4.6, "ratings_count": 9 } }
+{ "event": "comment", "data": { "id": 5, "user": "someuser", "body": "great video!", "created_at": "..." } }
+```
+
+No authentication is required just to connect and listen — but actually triggering these events (rating, commenting, watching) still goes through the normal authenticated REST endpoints (`/api/videos/{id}/rate/`, `/comments/`, `/stream/`).
