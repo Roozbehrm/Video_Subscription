@@ -1,0 +1,111 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: videosub
+      POSTGRES_USER: videosub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-videosub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U videosub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://videosub:${POSTGRES_PASSWORD:-videosub}@db:5432/videosub
+      REDIS_URL: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DJANGO_DEBUG: "0"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Only turns "healthy" once migrate/collectstatic have finished and daphne is
+      # actually answering - that's the signal worker/beat/nginx wait on below.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/schema/')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    expose:
+      - "8000"
+
+  worker:
+    build: .
+    command: celery -A config worker -l info
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://videosub:${POSTGRES_PASSWORD:-videosub}@db:5432/videosub
+      REDIS_URL: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DJANGO_DEBUG: "0"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  beat:
+    build: .
+    command: celery -A config beat -l info
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://videosub:${POSTGRES_PASSWORD:-videosub}@db:5432/videosub
+      REDIS_URL: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DJANGO_DEBUG: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

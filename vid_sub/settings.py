@@ -10,10 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import os
 from datetime import timedelta
 from pathlib import Path
 import dj_database_url
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,12 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-key-change-me")
+SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-insecure-key-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+DEBUG = config("DJANGO_DEBUG", default=True, cast=bool)
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="*").split(",")
 
 
 # Application definition
@@ -195,30 +195,31 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Channels: in-memory by default (single process / tests), Redis if REDIS_URL is set.
-if os.environ.get("REDIS_URL"):
+REDIS_URL = config("REDIS_URL", default="")
+if REDIS_URL:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [os.environ["REDIS_URL"]]},
+            "CONFIG": {"hosts": [REDIS_URL]},
         }
     }
 else:
     CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 # Payment gateway (dotted path). Swap for a real gateway implementation in production.
-PAYMENT_GATEWAY = os.environ.get("PAYMENT_GATEWAY", "subscriptions.gateway.MockGateway")
+PAYMENT_GATEWAY = config("PAYMENT_GATEWAY", default="subscriptions.gateway.MockGateway")
 
 # ---------------------------------------------------------------- Celery
-from celery.schedules import crontab  
+from celery.schedules import crontab
 
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/1")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 # CELERY_TASK_ALWAYS_EAGER=1 runs tasks inline (no broker/worker needed) - handy for local dev
-CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1"
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
 
 CELERY_BEAT_SCHEDULE = {
     # renew (auto_renew=True) or expire subscriptions whose period ended
@@ -230,9 +231,9 @@ CELERY_BEAT_SCHEDULE = {
 
 # ---------------------------------------------------------------- Zarinpal
 # Get a merchant id (and a free sandbox one for testing) at https://next.zarinpal.com
-ZARINPAL_MERCHANT_ID = os.environ.get("ZARINPAL_MERCHANT_ID", "00000000-0000-0000-0000-000000000000")
-ZARINPAL_SANDBOX = os.environ.get("ZARINPAL_SANDBOX", "1") == "1"
+ZARINPAL_MERCHANT_ID = config("ZARINPAL_MERCHANT_ID", default="00000000-0000-0000-0000-000000000000")
+ZARINPAL_SANDBOX = config("ZARINPAL_SANDBOX", default=True, cast=bool)
 # Zarinpal needs a fully-qualified callback URL; ngrok/a real domain is required for real testing.
-SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "http://127.0.0.1:8000")
+SITE_BASE_URL = config("SITE_BASE_URL", default="http://127.0.0.1:8000")
 # Zarinpal amounts are in Rial. 1 Toman = 10 Rial; store Plan.price in Toman like the rest of the app.
 TOMAN_TO_RIAL = 10

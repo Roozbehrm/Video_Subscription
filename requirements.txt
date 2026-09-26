@@ -14,3 +14,4 @@ whitenoise>=6.7
 channels-redis>=4.2
 pytest>=8.0
 pytest-django>=4.8
+python-decouple>=3.8
