@@ -35,6 +35,7 @@ class RenewSerializer(serializers.Serializer):
 
 class ZarinpalCheckoutSerializer(serializers.Serializer):
 
+
     plan_id = serializers.PrimaryKeyRelatedField(
         queryset=Plan.objects.filter(is_active=True), source="plan"
     )

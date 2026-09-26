@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Avg, Count, F
 from django.http import FileResponse, Http404
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -52,7 +53,8 @@ class VideoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
 
-
+    # ---- stream (protected content) ----
+    @extend_schema(responses={200: OpenApiResponse(description="Raw video file bytes (video/mp4)")})
     @action(
         detail=True, methods=["get"],
         permission_classes=[permissions.IsAuthenticated, HasVideoAccess],
@@ -70,6 +72,7 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return FileResponse(video.video_file.open("rb"), content_type="video/mp4")
 
+    @extend_schema(request=ProgressSerializer, responses=ProgressSerializer)
     @action(
         detail=True, methods=["post"],
         permission_classes=[permissions.IsAuthenticated, HasVideoAccess],
@@ -82,7 +85,11 @@ class VideoViewSet(viewsets.ModelViewSet):
         record_watch(request.user, video, ser.validated_data["progress_seconds"])
         return Response({"progress_seconds": ser.validated_data["progress_seconds"]})
 
-
+    # ---- rating ----
+    @extend_schema(
+        request=RatingSerializer,
+        responses=OpenApiResponse(description="{'score': int, 'avg_rating': float, 'ratings_count': int}"),
+    )
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def rate(self, request, pk=None):
         """Create or update the current user's rating (1-5)."""
@@ -104,7 +111,9 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return Response({"score": score, **payload})
 
-
+  
+    @extend_schema(methods=["GET"], responses=CommentSerializer(many=True))
+    @extend_schema(methods=["POST"], request=CommentSerializer, responses=CommentSerializer)
     @action(
         detail=True, methods=["get", "post"],
         permission_classes=[permissions.IsAuthenticatedOrReadOnly],

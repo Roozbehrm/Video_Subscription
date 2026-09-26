@@ -20,7 +20,7 @@ class BasePaymentGateway(ABC):
 
 
 class MockGateway(BasePaymentGateway):
-    """Always succeeds, unless the client sends payment_token == "fail"."""
+
 
     def charge(self, *, user, amount, token=None, description="") -> PaymentResult:
         if token == "fail":
@@ -29,7 +29,7 @@ class MockGateway(BasePaymentGateway):
 
 
 class AlwaysFailGateway(BasePaymentGateway):
-    """Useful in tests to simulate failed (auto-)renewals."""
+
 
     def charge(self, *, user, amount, token=None, description="") -> PaymentResult:
         return PaymentResult(False, "", "Gateway unavailable.")

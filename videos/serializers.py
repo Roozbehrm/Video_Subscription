@@ -12,7 +12,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class VideoSerializer(serializers.ModelSerializer):
-
+    # the file is never exposed as a URL: it is only delivered by /stream/
     video_file = serializers.FileField(write_only=True, required=False)
     has_access = serializers.SerializerMethodField()
 

@@ -4,6 +4,7 @@ from django.conf import settings
 _BASE = "https://sandbox.zarinpal.com" if settings.ZARINPAL_SANDBOX else "https://payment.zarinpal.com"
 REQUEST_URL = f"{_BASE}/pg/v4/payment/request.json"
 VERIFY_URL = f"{_BASE}/pg/v4/payment/verify.json"
+# Per Zarinpal's docs, StartPay lives on the same host as request/verify.
 _STARTPAY_BASE = _BASE
 
 
@@ -13,8 +14,9 @@ class ZarinpalError(Exception):
         self.code = code
 
 
-def request_payment(*, amount_rial: int, description: str, callback_url: str, mobile: str = "", email: str = "") -> str:
-   
+def request_payment(*, amount_rial: int, description: str, callback_url: str,
+                     mobile: str = "", email: str = "") -> str:
+    """Ask Zarinpal to open a payment session. Returns an `authority` string."""
     payload = {
         "merchant_id": settings.ZARINPAL_MERCHANT_ID,
         "amount": amount_rial,
