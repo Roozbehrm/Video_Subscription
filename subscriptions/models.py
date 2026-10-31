@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 from django.conf import settings
-from django.db import models
-from django.db.models import Q
+from django.db import models, transaction
+from django.db.models import F, Q
 from django.utils import timezone
 
 
@@ -16,6 +18,25 @@ class Plan(models.Model):
     class Meta:
         ordering = ["tier", "price"]
 
+    def save(self, *args, **kwargs):
+        # When the duration changes, shift the end date of every running
+        # subscription on this plan by the difference (works for renewed
+        # subscriptions too, since it adjusts instead of recalculating).
+        old_days = None
+        if self.pk:
+            old_days = (
+                Plan.objects.filter(pk=self.pk)
+                .values_list("duration_days", flat=True)
+                .first()
+            )
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if old_days is not None and old_days != self.duration_days:
+                delta = timedelta(days=self.duration_days - old_days)
+                self.subscriptions.filter(status="active").update(
+                    end_date=F("end_date") + delta
+                )
+
     def __str__(self):
         return f"{self.name} (tier {self.tier})"
 
@@ -30,7 +51,10 @@ class Subscription(models.Model):
     )
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
     start_date = models.DateTimeField(default=timezone.now)
-    end_date = models.DateTimeField()
+    end_date = models.DateTimeField(
+        blank=True,
+        help_text="Leave empty to set automatically: start date + plan duration.",
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
     auto_renew = models.BooleanField(default=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
@@ -45,6 +69,14 @@ class Subscription(models.Model):
                 name="one_active_subscription_per_user",
             )
         ]
+
+    def save(self, *args, **kwargs):
+        # Auto-fill the end date (e.g. when created from the admin) from the plan duration.
+        if self.end_date is None:
+            self.end_date = (self.start_date or timezone.now()) + timedelta(
+                days=self.plan.duration_days
+            )
+        super().save(*args, **kwargs)
 
     @property
     def is_canceled(self):
